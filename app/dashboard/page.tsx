@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
 import { ShieldAlert, Navigation, Search, MapPin, CheckCircle2, Clock, AlertTriangle, Package, Activity, BellRing, UserCircle, Users, MessageSquare, Send, Sparkles, X, Loader2 } from 'lucide-react';
@@ -526,8 +526,8 @@ function UnifiedUserDashboard({ user }: { user: any }) {
                           <div>
                             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Location</div>
                             <div className="text-[10px] font-mono text-slate-300">
-                              {mission.latitude.toFixed(4)}, {mission.longitude.toFixed(4)}
-                            </div>
+                               {mission.latitude?.toFixed(4) ?? '—'}, {mission.longitude?.toFixed(4) ?? '—'}
+                             </div>
                           </div>
                         </div>
 
@@ -601,30 +601,30 @@ function MissionChat({ mission, user, onClose, onProgressUpdate }: { mission: an
   const [aiSummary, setAiSummary] = useState('Analysing live intel...');
   const [loadingAi, setLoadingAi] = useState(false);
   const [localProgress, setLocalProgress] = useState(mission.progress || 0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const channelName = useRef(`mission-chat-${mission.id}`).current;
 
-  // Sync with prop if it changes
+  // Scroll to bottom when messages change
   useEffect(() => {
-    if (mission.progress !== undefined) {
-      setLocalProgress(mission.progress);
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Sync progress with prop
+  useEffect(() => {
+    if (mission.progress !== undefined) setLocalProgress(mission.progress);
   }, [mission.progress]);
 
   useEffect(() => {
     fetchMessages();
     const channel = supabase
-      .channel(`mission-chat-${mission.id}-${Math.random()}`) // Unique channel
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'mission_messages', 
-        filter: `request_id=eq.${mission.id}` 
-      }, (payload) => {
-        console.log('Realtime update:', payload);
-        fetchMessages();
-      })
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'mission_messages',
+        filter: `request_id=eq.${mission.id}`
+      }, () => { fetchMessages(); })
+      .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [mission.id]);
@@ -761,14 +761,18 @@ function MissionChat({ mission, user, onClose, onProgressUpdate }: { mission: an
             messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.user_id === user.id ? 'items-end' : 'items-start'}`}>
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 px-1">{m.user_name}</span>
-                <div className={`px-4 py-2 rounded-2xl text-sm max-w-[80%] ${
+                <div className={`px-4 py-2.5 rounded-2xl text-sm max-w-[80%] ${
                   m.user_id === user.id ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none'
                 }`}>
                   {m.message}
                 </div>
+                <span className="text-[8px] text-slate-600 mt-1 px-1">
+                  {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             ))
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
@@ -790,71 +794,145 @@ function MissionChat({ mission, user, onClose, onProgressUpdate }: { mission: an
 }
 
 // -------------------------------------------------------------
-// NGO DASHBOARD
+// NGO DASHBOARD — real data
 // -------------------------------------------------------------
 function NgoDashboard() {
+  const [stats, setStats] = useState({ totalRequests: 0, criticalPending: 0, activeVolunteers: 0, completedToday: 0 });
+  const [recentRequests, setRecentRequests] = useState<any[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcasting, setBroadcasting] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/stats').then(r => r.json()).then(d => {
+      if (d.stats) setStats(d.stats);
+      if (d.recentRequests) setRecentRequests(d.recentRequests);
+    }).finally(() => setLoadingStats(false));
+
+    const channel = supabase
+      .channel('ngo-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
+        fetch('/api/stats').then(r => r.json()).then(d => {
+          if (d.stats) setStats(d.stats);
+          if (d.recentRequests) setRecentRequests(d.recentRequests);
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const handleBroadcast = async () => {
+    if (!broadcastMsg.trim()) return;
+    setBroadcasting(true);
+    try {
+      const { error } = await supabase.from('alerts').insert({ title: 'NGO Broadcast', message: broadcastMsg, severity: 'warning', active: true });
+      if (error) throw error;
+      toast.success('Alert broadcast to all users!');
+      setBroadcastMsg('');
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBroadcasting(false); }
+  };
+
+  const statCards = [
+    { label: 'Total Requests', val: stats.totalRequests, icon: Activity, color: 'text-blue-400' },
+    { label: 'Critical Pending', val: stats.criticalPending, icon: AlertTriangle, color: 'text-red-400' },
+    { label: 'Active Volunteers', val: stats.activeVolunteers, icon: Users, color: 'text-emerald-400' },
+    { label: 'Completed Today', val: stats.completedToday, icon: CheckCircle2, color: 'text-yellow-400' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[
-          { label: 'Total Requests', val: '1,240', icon: Activity, color: 'text-blue-400' },
-          { label: 'Pending', val: '342', icon: Clock, color: 'text-yellow-400' },
-          { label: 'Volunteers', val: '89', icon: Users, color: 'text-emerald-400' },
-          { label: 'Critical', val: '15', icon: AlertTriangle, color: 'text-red-400' },
-        ].map((s,i) => (
-          <div key={i} className="glass-panel p-4 rounded-xl flex flex-col items-center justify-center text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {statCards.map((s, i) => (
+          <div key={i} className="glass-panel p-5 rounded-2xl flex flex-col items-center justify-center text-center border border-white/5">
             <s.icon className={`w-6 h-6 mb-2 ${s.color}`} />
-            <div className="text-2xl font-bold text-white">{s.val}</div>
-            <div className="text-xs text-slate-400 uppercase tracking-wider">{s.label}</div>
+            <div className="text-2xl font-black text-white">
+              {loadingStats ? <div className="w-10 h-6 skeleton rounded" /> : s.val}
+            </div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{s.label}</div>
           </div>
         ))}
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 glass-panel p-6 rounded-2xl">
-          <h3 className="text-xl font-bold text-white mb-6">Recent Coordination Tasks</h3>
+          <h3 className="text-lg font-black text-white mb-4 uppercase tracking-tight flex items-center gap-2">
+            <div className="w-1.5 h-5 bg-blue-500 rounded-full" /> Live Request Feed
+          </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-800/50 text-slate-400">
+              <thead className="text-slate-500">
                 <tr>
-                  <th className="p-3 rounded-tl-lg rounded-bl-lg">Category</th>
-                  <th className="p-3">Location</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 rounded-tr-lg rounded-br-lg">Action</th>
+                  <th className="p-3 text-[10px] uppercase tracking-widest">Category</th>
+                  <th className="p-3 text-[10px] uppercase tracking-widest">Priority</th>
+                  <th className="p-3 text-[10px] uppercase tracking-widest">Status</th>
+                  <th className="p-3 text-[10px] uppercase tracking-widest">Volunteers</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
-                {[1,2,3,4].map((i) => (
-                  <tr key={i} className="text-white">
-                    <td className="p-3">Medical Supplies</td>
-                    <td className="p-3 text-slate-400">Sector {i}</td>
-                    <td className="p-3"><span className="text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded text-xs">Pending Setup</span></td>
-                    <td className="p-3"><button className="text-blue-400 hover:text-blue-300">Assign Team</button></td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-800/50">
+                {loadingStats ? (
+                  [1,2,3].map(i => (
+                    <tr key={i}><td colSpan={4} className="p-3"><div className="h-4 skeleton rounded w-full" /></td></tr>
+                  ))
+                ) : recentRequests.length === 0 ? (
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-500 text-xs">No active requests</td></tr>
+                ) : (
+                  recentRequests.map((req) => (
+                    <tr key={req.id} className="text-white hover:bg-slate-800/30 transition-colors">
+                      <td className="p-3 font-medium">{req.category}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                          req.priority === 'Critical' ? 'bg-red-500/20 text-red-400' :
+                          req.priority === 'High' ? 'bg-orange-500/20 text-orange-400' : 'bg-slate-700 text-slate-300'
+                        }`}>{req.priority || 'Medium'}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded text-[9px] font-bold uppercase">{req.status}</span>
+                      </td>
+                      <td className="p-3 text-slate-400 text-xs">{req.volunteer_count || 0} / 10</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
-        
-        <div className="glass-panel p-6 rounded-2xl flex flex-col">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <ShieldAlert className="text-red-400"/> AI Fraud Check
-          </h3>
-          <p className="text-slate-400 text-sm mb-4">Our AI systems have flagged potential duplicate or non-urgent requests in the last hour.</p>
-          
-          <div className="space-y-3 flex-1">
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <div className="text-white font-medium text-sm">Possible Duplicate</div>
-              <div className="text-slate-400 text-xs mt-1">2 requests from same IP for Rescue within 5 mins.</div>
-            </div>
-            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-              <div className="text-white font-medium text-sm">Low Priority Flagged</div>
-              <div className="text-slate-400 text-xs mt-1">"Need extra blankets" marked as Critical. Reclassified to Medium.</div>
+
+        <div className="glass-panel p-6 rounded-2xl flex flex-col gap-4">
+          <div>
+            <h3 className="text-lg font-black text-white mb-1 flex items-center gap-2">
+              <BellRing className="w-4 h-4 text-orange-400" /> Broadcast Alert
+            </h3>
+            <p className="text-slate-400 text-xs mb-3">Send emergency broadcast to all active users.</p>
+            <textarea
+              value={broadcastMsg}
+              onChange={e => setBroadcastMsg(e.target.value)}
+              placeholder="Type alert message..."
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm h-24 resize-none focus:ring-2 focus:ring-orange-500 outline-none"
+            />
+            <button
+              onClick={handleBroadcast}
+              disabled={broadcasting || !broadcastMsg.trim()}
+              className="w-full mt-2 bg-orange-600 hover:bg-orange-700 text-white py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+            >
+              {broadcasting ? 'Broadcasting...' : '📢 Send Broadcast'}
+            </button>
+          </div>
+          <div className="border-t border-white/5 pt-4">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" /> AI Flags
+            </h4>
+            <div className="space-y-2">
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="text-white font-semibold text-xs">Possible Duplicate</div>
+                <div className="text-slate-400 text-[10px] mt-0.5">2 similar requests in same area within 5 min.</div>
+              </div>
+              <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <div className="text-white font-semibold text-xs">Priority Mismatch</div>
+                <div className="text-slate-400 text-[10px] mt-0.5">Low-urgency request marked Critical — reclassified.</div>
+              </div>
             </div>
           </div>
-          
-          <button className="w-full mt-4 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg text-sm transition-colors">View All Logs</button>
         </div>
       </div>
     </div>

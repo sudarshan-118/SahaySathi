@@ -1,0 +1,37 @@
+{
+  "name": "SahaySathi - Disaster Coordination",
+  "short_name": "SahaySathi",
+  "description": "Hyperlocal Disaster Volunteer Coordination Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "social"],
+  "shortcuts": [
+    {
+      "name": "SOS Alert",
+      "url": "/dashboard",
+      "description": "Send emergency SOS"
+    },
+    {
+      "name": "Live Map",
+      "url": "/map",
+      "description": "View emergency map"
+    }
+  ]
+}

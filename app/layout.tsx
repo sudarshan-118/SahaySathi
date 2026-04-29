@@ -8,6 +8,14 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'SahaySathi | Right Help. Right Place. Right Time.',
   description: 'Hyperlocal Disaster Volunteer Coordination Platform',
+  manifest: '/manifest.json',
+  themeColor: '#3b82f6',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SahaySathi',
+  },
 };
 
 export default function RootLayout({

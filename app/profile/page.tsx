@@ -80,7 +80,10 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="p-8 text-white">Loading profile...</div>
+        <div className="p-8 flex flex-col items-center justify-center min-h-[50vh] gap-4">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+          <p className="text-slate-400 text-sm font-medium animate-pulse">Loading profile...</p>
+        </div>
       </DashboardLayout>
     );
   }
