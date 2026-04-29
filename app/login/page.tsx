@@ -32,17 +32,30 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
+    try {
+      setLoading(true);
+      
+      // Clear any existing session to prevent "Failed to fetch" on stale session
+      // This often fixes the slow login/re-login issues
+      await supabase.auth.signOut().catch(() => {});
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
 
-    if (error) {
-      toast.error(error.message);
+      if (error) {
+        toast.error(`Login Error: ${error.message}`);
+        setLoading(false);
+      }
+    } catch (err: any) {
+      toast.error(`Network Error: ${err.message || 'Please check your connection'}`);
       setLoading(false);
     }
   };
