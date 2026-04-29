@@ -5,10 +5,15 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholde
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true, // Keep it true for internal navigation
+    persistSession: true,
     storageKey: 'sahaysathi-auth-token',
-    storage: typeof window !== 'undefined' ? window.sessionStorage : undefined, // USE SESSION STORAGE (Clears on tab close)
+    storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    // THE ULTIMATE FIX: Disable the navigator lock system to prevent crashes in dev mode
+    // @ts-ignore - this is a known workaround for the locking issue
+    lock: {
+      acquire: async () => ({ release: () => {} }),
+    }
   }
 });
