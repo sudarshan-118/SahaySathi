@@ -1,7 +1,21 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield, Users, Clock, MapPin, Activity, Heart, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function LandingPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setIsLoggedIn(true);
+    });
+  }, []);
+
+  const primaryLink = isLoggedIn ? "/dashboard" : "/login";
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-50 flex flex-col font-sans">
       {/* Navbar */}
@@ -14,11 +28,11 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
             <Link href="#features" className="hover:text-white transition-colors">Features</Link>
             <Link href="#how-it-works" className="hover:text-white transition-colors">How it works</Link>
-            <Link href="/login" className="hover:text-white transition-colors">Login</Link>
+            <Link href={primaryLink} className="hover:text-white transition-colors">{isLoggedIn ? 'Dashboard' : 'Login'}</Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-              Get Started
+            <Link href={primaryLink} className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+              {isLoggedIn ? 'Go to Dashboard' : 'Get Started'}
             </Link>
           </div>
         </div>
@@ -45,17 +59,17 @@ export default function LandingPage() {
               Hyperlocal Disaster Volunteer Coordination Platform. Connecting victims with nearby volunteers and essential resources in real-time.
             </p>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-              <Link href="/login" className="w-full sm:w-auto px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-lg transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(220,38,38,0.4)] flex items-center justify-center gap-2">
+              <Link href={primaryLink} className="w-full sm:w-auto px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-lg transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(220,38,38,0.4)] flex items-center justify-center gap-2">
                 <Shield className="w-5 h-5" />
                 Request Help
               </Link>
-              <Link href="/login" className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2">
+              <Link href={primaryLink} className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2">
                 <Users className="w-5 h-5" />
                 Volunteer Now
               </Link>
             </div>
             <div className="mt-8">
-              <Link href="/login" className="text-sm text-slate-400 hover:text-white transition-colors underline underline-offset-4">
+              <Link href="/ngo-login" className="text-sm text-slate-400 hover:text-white transition-colors underline underline-offset-4">
                 NGO / Admin Login
               </Link>
             </div>
@@ -115,8 +129,8 @@ export default function LandingPage() {
           <div className="max-w-4xl mx-auto px-4 relative z-10 text-center glass-panel p-12 rounded-3xl">
             <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready to make a difference?</h2>
             <p className="text-xl text-slate-300 mb-10">Join thousands of volunteers already helping their communities.</p>
-            <Link href="/login" className="inline-flex items-center gap-2 px-8 py-4 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-slate-100 transition-colors">
-              Join the Platform <ArrowRight className="w-5 h-5" />
+            <Link href={primaryLink} className="inline-flex items-center gap-2 px-8 py-4 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-slate-100 transition-colors">
+              {isLoggedIn ? 'Go to Dashboard' : 'Join the Platform'} <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
         </section>
