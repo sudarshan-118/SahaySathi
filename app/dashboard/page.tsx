@@ -282,6 +282,21 @@ function UnifiedUserDashboard({ user }: { user: any }) {
   const updateStatus = async (id: number, newStatus: string) => {
     if (!user) return;
     try {
+      // DUPLICATE PREVENTION: Check if mission is already taken
+      if (newStatus === 'accepted') {
+        const { data: currentMission } = await supabase
+          .from('requests')
+          .select('status, volunteer_id')
+          .eq('id', id)
+          .single();
+
+        if (currentMission?.status === 'accepted') {
+          toast.warning('Mission claimed! Another responder is already on the way.');
+          fetchNearbyRequests(); // Refresh the list
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('requests')
         .update({ 
@@ -291,7 +306,7 @@ function UnifiedUserDashboard({ user }: { user: any }) {
         .eq('id', id);
 
       if (error) throw error;
-      toast.success(newStatus === 'solved' ? 'Incident marked as Solved' : 'Mission Accepted');
+      toast.success(newStatus === 'solved' ? 'Incident marked as Solved' : 'Mission Accepted! Deploying...');
     } catch (err: any) {
       toast.error(err.message);
     }
