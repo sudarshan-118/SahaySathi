@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
-import { Activity } from 'lucide-react';
+import { Activity, Clock, ShieldAlert } from 'lucide-react';
 
 // Fix Leaflet default icon issues in Next.js
 const customIcon = (color: string) => new L.Icon({
@@ -16,6 +16,13 @@ const customIcon = (color: string) => new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41]
 });
+
+// Component to handle map re-centering
+function ChangeView({ center, zoom }: { center: [number, number], zoom: number }) {
+  const map = useMap();
+  map.setView(center, zoom);
+  return null;
+}
 
 const getMarkerColor = (category: string) => {
   switch (category.toLowerCase()) {
@@ -29,32 +36,34 @@ const getMarkerColor = (category: string) => {
 
 export default function MapComponent() {
   const [requests, setRequests] = useState<any[]>([]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([20.5937, 78.9629]); // Default to center of India
+  const [zoom, setZoom] = useState(5);
 
   useEffect(() => {
     fetchRequests();
 
-    // Subscribe to realtime changes
     const channel = supabase
       .channel('public:requests')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, payload => {
-        fetchRequests(); // Re-fetch on any change for simplicity
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
+        fetchRequests();
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchRequests = async () => {
     const { data, error } = await supabase
       .from('requests')
       .select('*')
-      .neq('status', 'solved') // Hide solved requests
+      .neq('status', 'solved')
       .order('created_at', { ascending: false });
     
-    if (!error && data) {
+    if (!error && data && data.length > 0) {
       setRequests(data);
+      // Auto-center on the most recent incident
+      setMapCenter([data[0].latitude, data[0].longitude]);
+      setZoom(12);
     }
   };
 
@@ -65,11 +74,12 @@ export default function MapComponent() {
   return (
     <div className="h-full w-full relative z-0">
       <MapContainer 
-        center={[28.6139, 77.2090]} // Default to New Delhi
-        zoom={12} 
+        center={mapCenter} 
+        zoom={zoom} 
         className="h-full w-full"
         zoomControl={false}
       >
+        <ChangeView center={mapCenter} zoom={zoom} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -83,28 +93,37 @@ export default function MapComponent() {
             icon={customIcon(getMarkerColor(req.category || 'rescue'))}
           >
             <Popup className="custom-popup">
-              <div className="p-2 font-sans w-64">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg leading-none">{req.category}</h3>
+              <div className="p-3 font-sans w-72 bg-slate-900 text-white rounded-xl border border-white/10">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-black text-xl leading-none uppercase tracking-tighter">{req.category}</h3>
                   <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
-                    <Activity className="w-3 h-3" /> {formatTime(req.created_at)}
+                    <Clock className="w-3 h-3" /> {formatTime(req.created_at)}
                   </span>
                 </div>
-                <p className="text-sm text-slate-600 mb-3 line-clamp-3">{req.description}</p>
                 
-                <div className="space-y-2 mb-3">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="font-bold text-blue-600 capitalize">{req.status || 'Pending'}</span>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed line-clamp-3">{req.description}</p>
+                
+                {/* AI REQUIREMENTS IN POPUP */}
+                <div className="bg-slate-800/50 p-3 rounded-lg border border-white/5 mb-4">
+                  <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <Activity className="w-3 h-3" /> Rescue Gear Needed
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Reported:</span>
-                    <span className="text-slate-600">{new Date(req.created_at).toLocaleDateString()}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {(req.rescue_requirements || 'Standard Rescue Kit').split(',').map((item: string, idx: number) => (
+                      <span key={idx} className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold border border-emerald-500/20">
+                        {item.trim()}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 rounded transition-colors shadow-lg shadow-blue-500/30">
-                  Accept Mission
+                <div className="flex justify-between items-center mb-4 px-1">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Priority</span>
+                  <span className="px-2 py-0.5 bg-red-500/20 text-red-500 text-[10px] font-black rounded uppercase tracking-tighter">Critical</span>
+                </div>
+
+                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-black py-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 active:scale-95 uppercase tracking-widest">
+                  Accept This Mission
                 </button>
               </div>
             </Popup>

@@ -17,20 +17,38 @@ export default function NgoLoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      toast.error(error.message);
-    } else if (data.user) {
-      // Ensure role is set to NGO upon successful NGO login
-      await supabase.from('profiles').upsert({ id: data.user.id, role: 'ngo', updated_at: new Date().toISOString() });
-      toast.success('NGO Authorized Successfully');
-      router.push('/dashboard');
+      if (error) throw error;
+
+      if (data.user) {
+        // VERIFY ROLE: Check if this user is actually an NGO
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || profile?.role !== 'ngo') {
+          // Access Denied: Not an NGO account
+          await supabase.auth.signOut();
+          toast.error('Unauthorized: This account does not have NGO administrative privileges.');
+          setLoading(false);
+          return;
+        }
+
+        toast.success('NGO Authorized Successfully');
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Login failed');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {

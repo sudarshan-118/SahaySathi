@@ -46,14 +46,11 @@ export default function OnboardingPage() {
   const router = useRouter();
 
   const handleContinue = async () => {
-    if (!selectedRole) return;
-    
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        toast.info('Please log in first to set your role.');
         router.push('/login');
         return;
       }
@@ -62,16 +59,16 @@ export default function OnboardingPage() {
         .from('profiles')
         .upsert({ 
           id: user.id, 
-          role: selectedRole,
+          role: 'volunteer', // Default for all unified users
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
 
-      toast.success('Profile setup complete!');
+      toast.success('Welcome to SahaySathi!');
       router.push('/dashboard');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update role');
+      toast.error(error.message || 'Failed to initialize profile');
     } finally {
       setLoading(false);
     }
@@ -80,62 +77,26 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-slate-900 py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center font-sans">
       <div className="w-full max-w-4xl">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-4">How do you want to use SahaySathi?</h1>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            Select your primary role. This helps us tailor your dashboard and connect you with the right people.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
-          {ROLES.map((role) => {
-            const Icon = role.icon;
-            const isSelected = selectedRole === role.id;
+        <div className="glass-panel p-12 rounded-3xl border border-blue-500/20 text-center mb-12 relative overflow-hidden">
+          <div className="absolute inset-0 bg-blue-500/5 animate-pulse"></div>
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="p-5 bg-blue-600/20 rounded-2xl mb-6">
+              <ShieldAlert className="w-12 h-12 text-blue-500" />
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-4">You're all set!</h1>
+            <p className="text-slate-400 text-lg max-w-xl mx-auto mb-8">
+              Welcome to the SahaySathi Responder network. You can now report emergencies or provide assistance to those in need—all from one unified dashboard.
+            </p>
             
-            return (
-              <button
-                key={role.id}
-                onClick={() => setSelectedRole(role.id)}
-                className={`relative flex items-start gap-4 p-6 rounded-2xl text-left transition-all duration-200 border-2 ${
-                  isSelected 
-                    ? `${role.activeBorder} bg-slate-800 scale-[1.02] shadow-xl` 
-                    : `${role.border} bg-slate-800/50 hover:bg-slate-800 hover:scale-[1.01]`
-                }`}
-              >
-                <div className={`p-4 rounded-xl ${role.bg} ${role.color}`}>
-                  <Icon className="w-8 h-8" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-2">{role.title}</h3>
-                  <p className="text-slate-400">{role.description}</p>
-                </div>
-                {isSelected && (
-                  <div className={`absolute top-6 right-6 ${role.color}`}>
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-col items-center gap-6">
-          <button
-            onClick={handleContinue}
-            disabled={!selectedRole || loading}
-            className={`w-full max-w-md flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all ${
-              !selectedRole 
-                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]'
-            }`}
-          >
-            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-              <>Complete Setup <ArrowRight className="w-6 h-6" /></>
-            )}
-          </button>
-          <Link href="/dashboard" className="text-slate-500 hover:text-slate-400 transition-colors">
-            Skip for now
-          </Link>
+            <button
+              onClick={() => handleContinue()}
+              className="w-full max-w-xs flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+                <>Enter Dashboard <ArrowRight className="w-6 h-6" /></>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

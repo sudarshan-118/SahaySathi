@@ -4,10 +4,10 @@ import { supabase } from '../../../lib/supabase';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { category, description, latitude, longitude, user_id } = body;
+    const { category, description, latitude, longitude, user_id, rescue_requirements } = body;
 
-    // Validate required fields if necessary (optional but recommended)
-    if (!category || !description || !latitude || !longitude || !user_id) {
+    // Validate required fields
+    if (!category || !description || latitude === undefined || longitude === undefined || !user_id) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
           latitude,
           longitude,
           user_id,
+          rescue_requirements,
         },
       ])
       .select();

@@ -19,9 +19,10 @@ export async function POST(request: Request) {
       messages: [
         {
           role: 'system',
-          content: `You are an emergency response AI. You analyze a situation description and output a JSON response containing exactly two fields:
-1. "priority": Must be exactly one of "Critical", "High", "Medium", or "Low".
+          content: `You are an emergency response AI. You analyze a situation description and output a JSON response containing:
+1. "priority": Exactly one of "Critical", "High", "Medium", or "Low".
 2. "summary": A short, one-line summary of the emergency.
+3. "requirements": A comma-separated list of specific tools or skills needed for rescue (e.g., "Ropes, First Aid, Boat, Life Jacket").
 
 Respond ONLY with valid JSON.`,
         },
@@ -36,14 +37,18 @@ Respond ONLY with valid JSON.`,
     const aiResponseContent = completion.choices[0]?.message?.content;
     const parsedResponse = JSON.parse(aiResponseContent || '{}');
 
-    return NextResponse.json(parsedResponse, { status: 200 });
+    return NextResponse.json({
+      priority: parsedResponse.priority || 'High',
+      summary: parsedResponse.summary || 'Emergency reported',
+      requirements: parsedResponse.requirements || 'Standard Rescue Kit'
+    }, { status: 200 });
   } catch (error: any) {
     console.error('Groq AI Request Failed:', error.message);
-    // Fallback response as requested
     return NextResponse.json(
       {
         priority: 'High',
         summary: 'Emergency reported',
+        requirements: 'First Aid Kit, Emergency Response'
       },
       { status: 200 }
     );

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
 import { ShieldAlert, Navigation, Search, MapPin, CheckCircle2, Clock, AlertTriangle, Package, Activity, BellRing, UserCircle, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 export default function DashboardPage() {
   const [role, setRole] = useState<string>('');
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,12 +17,13 @@ export default function DashboardPage() {
 
   const checkUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        setUser(authUser);
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', user.id)
+          .eq('id', authUser.id)
           .single();
           
         if (profile?.role) {
@@ -34,40 +37,41 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-white">Loading dashboard...</div>;
+  if (loading) return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <header className="mb-8 flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Here is your emergency response overview.</p>
+          <p className="text-slate-400">SahaySathi Unified Response Center</p>
         </div>
-        <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg">
+        <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
           <span className="text-sm text-slate-300 font-medium">System Online</span>
         </div>
       </header>
 
-      {role === 'victim' && <VictimDashboard />}
-      {role === 'volunteer' && <VolunteerDashboard />}
-      {role === 'ngo' && <NgoDashboard />}
-      {role === 'supplier' && <SupplierDashboard />}
+      {role === 'ngo' ? <NgoDashboard /> : <UnifiedUserDashboard user={user} />}
     </div>
   );
 }
 
 // -------------------------------------------------------------
-// VICTIM DASHBOARD
+// VICTIM DASHBOARD (SOS REPORTING)
 // -------------------------------------------------------------
-function VictimDashboard() {
+function VictimDashboard({ user }: { user: any }) {
   const [isRequesting, setIsRequesting] = useState(false);
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Medical');
   const [activeRequests, setActiveRequests] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchMyRequests();
+    if (user) fetchMyRequests();
     const channel = supabase
       .channel('my-request-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
@@ -76,10 +80,9 @@ function VictimDashboard() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [user]);
 
   const fetchMyRequests = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data } = await supabase
@@ -93,6 +96,10 @@ function VictimDashboard() {
   };
   
   const handleSOS = async () => {
+    if (!user) {
+      toast.error('Session lost. Please login again.');
+      return;
+    }
     setIsRequesting(true);
     
     if (!navigator.geolocation) {
@@ -113,8 +120,6 @@ function VictimDashboard() {
         });
         const aiData = await aiResponse.json();
         
-        const { data: { user } } = await supabase.auth.getUser();
-
         const response = await fetch('/api/requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -123,7 +128,8 @@ function VictimDashboard() {
             description: description || aiData.summary || 'Emergency Request',
             latitude: lat,
             longitude: lng,
-            user_id: user?.id,
+            user_id: user.id,
+            rescue_requirements: aiData.requirements
           })
         });
         
@@ -148,69 +154,89 @@ function VictimDashboard() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* BIG SOS BUTTON */}
-      <div className="flex flex-col items-center justify-center py-12 glass-panel rounded-3xl border border-red-500/20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-red-500/5 animate-pulse"></div>
-        <button 
-          onClick={handleSOS}
-          disabled={isRequesting}
-          className="relative group w-48 h-48 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white font-black text-4xl shadow-[0_0_50px_rgba(220,38,38,0.6)] hover:shadow-[0_0_80px_rgba(220,38,38,0.8)] transition-all transform hover:scale-105 disabled:opacity-50 disabled:scale-100"
-        >
-          <div className="absolute inset-0 rounded-full border-4 border-red-400 opacity-0 group-hover:animate-ping"></div>
-          {isRequesting ? 'SENDING...' : 'SOS'}
-        </button>
-        <p className="mt-8 text-slate-300 font-medium">Tap immediately in case of emergency</p>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* EMERGENCY MODE HEADER */}
+      <div className="bg-red-950/30 border border-red-500/20 p-6 rounded-3xl backdrop-blur-md">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="p-3 bg-red-600 rounded-2xl shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+            <ShieldAlert className="w-8 h-8 text-white animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Emergency Mode</h2>
+            <p className="text-red-400/80 text-sm font-medium">Your location is being shared with nearby responders.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center py-8 relative overflow-hidden rounded-2xl bg-slate-900/50 border border-white/5">
+          <button 
+            onClick={handleSOS}
+            disabled={isRequesting}
+            className="relative group w-40 h-40 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white font-black text-4xl shadow-[0_0_50px_rgba(220,38,38,0.6)] hover:shadow-[0_0_80px_rgba(220,38,38,0.8)] transition-all transform active:scale-95 disabled:opacity-50"
+          >
+            <div className="absolute inset-0 rounded-full border-4 border-red-400 opacity-0 group-hover:animate-ping"></div>
+            {isRequesting ? '...' : 'SOS'}
+          </button>
+          <p className="mt-6 text-slate-400 text-sm font-bold uppercase tracking-widest">Tap for instant help</p>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-700/50">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Activity className="text-blue-500" /> Need Specific Help?
+        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-slate-900/40">
+          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+            <Activity className="text-red-500" /> Dispatch Details
           </h3>
           <div className="space-y-4">
-            <select 
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-            >
-              <option>Medical</option>
-              <option>Rescue</option>
-              <option>Food / Water</option>
-              <option>Shelter</option>
-            </select>
-            <textarea 
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe your situation briefly..."
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all"
-            ></textarea>
-            <button onClick={handleSOS} disabled={isRequesting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95">
-              Submit Request
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Incident Category</label>
+              <select 
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-2xl px-4 py-4 focus:ring-2 focus:ring-red-500 outline-none transition-all appearance-none"
+              >
+                <option>Medical</option>
+                <option>Rescue</option>
+                <option>Food / Water</option>
+                <option>Shelter</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Situation Description</label>
+              <textarea 
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe what's happening..."
+                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-2xl px-4 py-4 h-32 focus:ring-2 focus:ring-red-500 outline-none resize-none transition-all"
+              ></textarea>
+            </div>
+            <button onClick={handleSOS} disabled={isRequesting} className="w-full bg-slate-100 hover:bg-white text-slate-900 font-black py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]">
+              SEND EMERGENCY ALERT
             </button>
           </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-700/50">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Clock className="text-yellow-500" /> My Active Requests
+        <div className="glass-panel p-6 rounded-3xl border border-white/5 bg-slate-900/40">
+          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+            <Clock className="text-red-500" /> My Incident Log
           </h3>
-          <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+          <div className="space-y-4 max-h-[460px] overflow-y-auto custom-scrollbar pr-2">
             {activeRequests.length === 0 ? (
-              <div className="text-slate-500 text-center py-10">You have no active emergency requests.</div>
+              <div className="flex flex-col items-center justify-center py-20 text-slate-600">
+                <ShieldAlert className="w-12 h-12 mb-4 opacity-20" />
+                <p className="text-sm font-medium">No active reports</p>
+              </div>
             ) : (
               activeRequests.map((req) => (
-                <div key={req.id} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700 transition-all hover:border-slate-600">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter ${
-                      req.status === 'accepted' ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-500'
+                <div key={req.id} className="p-5 bg-slate-800/40 rounded-2xl border border-white/5 transition-all hover:bg-slate-800/60 group">
+                  <div className="flex justify-between items-start mb-3">
+                    <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                      req.status === 'accepted' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {req.status === 'accepted' ? 'Volunteer Assigned' : 'Pending Help'}
+                      {req.status === 'accepted' ? 'Rescue In-Progress' : 'Broadcasting SOS'}
                     </span>
-                    <span className="text-[10px] text-slate-500">{new Date(req.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">{new Date(req.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                   </div>
-                  <h4 className="text-white font-bold leading-tight">{req.category}</h4>
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{req.description}</p>
+                  <h4 className="text-white font-bold text-lg mb-1">{req.category}</h4>
+                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{req.description}</p>
                 </div>
               ))
             )}
@@ -222,9 +248,9 @@ function VictimDashboard() {
 }
 
 // -------------------------------------------------------------
-// VOLUNTEER DASHBOARD
+// UNIFIED USER DASHBOARD (RESCUE MODE)
 // -------------------------------------------------------------
-function VolunteerDashboard() {
+function UnifiedUserDashboard({ user }: { user: any }) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loadingMissions, setLoadingMissions] = useState(true);
   const [view, setView] = useState<'missions' | 'report'>('missions');
@@ -254,13 +280,13 @@ function VolunteerDashboard() {
   };
 
   const updateStatus = async (id: number, newStatus: string) => {
+    if (!user) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('requests')
         .update({ 
           status: newStatus,
-          volunteer_id: newStatus === 'accepted' ? user?.id : null
+          volunteer_id: newStatus === 'accepted' ? user.id : null
         })
         .eq('id', id);
 
@@ -273,86 +299,107 @@ function VolunteerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-4 mb-6 bg-slate-800/50 p-1.5 rounded-2xl w-fit">
-        <button 
-          onClick={() => setView('missions')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${view === 'missions' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-white'}`}
-        >
-          Missions
-        </button>
-        <button 
-          onClick={() => setView('report')}
-          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${view === 'report' ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'text-slate-400 hover:text-white'}`}
-        >
-          Report SOS
-        </button>
+      <div className="flex justify-center mb-8">
+        <div className="bg-slate-800/80 p-1.5 rounded-3xl flex gap-2 border border-white/5 backdrop-blur-xl">
+          <button 
+            onClick={() => setView('missions')}
+            className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${view === 'missions' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]' : 'text-slate-400 hover:text-white'}`}
+          >
+            Rescue Missions
+          </button>
+          <button 
+            onClick={() => setView('report')}
+            className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${view === 'report' ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'text-slate-400 hover:text-white'}`}
+          >
+            Report SOS
+          </button>
+        </div>
       </div>
 
       {view === 'report' ? (
-        <VictimDashboard /> // Re-use VictimDashboard for reporting
+        <VictimDashboard user={user} />
       ) : (
-        <>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Points', val: '450', icon: Activity, color: 'text-purple-400' },
-              { label: 'Helped', val: '12', icon: CheckCircle2, color: 'text-emerald-400' },
-              { label: 'Available', val: missions.length.toString(), icon: AlertTriangle, color: 'text-yellow-400' },
-              { label: 'Status', val: 'Active', icon: BellRing, color: 'text-blue-400' },
+              { label: 'Rank Points', val: '450', icon: Activity, color: 'text-emerald-400' },
+              { label: 'Lives Saved', val: '12', icon: CheckCircle2, color: 'text-blue-400' },
+              { label: 'Open Alerts', val: missions.length.toString(), icon: AlertTriangle, color: 'text-yellow-400' },
+              { label: 'Vitals', val: 'Active', icon: BellRing, color: 'text-emerald-400' },
             ].map((s,i) => (
-              <div key={i} className="glass-panel p-4 rounded-xl flex flex-col items-center justify-center text-center border border-slate-700/50">
-                <s.icon className={`w-6 h-6 mb-2 ${s.color}`} />
-                <div className="text-2xl font-bold text-white">{s.val}</div>
-                <div className="text-xs text-slate-400 uppercase tracking-wider">{s.label}</div>
+              <div key={i} className="glass-panel p-5 rounded-3xl flex flex-col items-center justify-center text-center border border-white/5 bg-slate-900/40">
+                <s.icon className={`w-5 h-5 mb-3 ${s.color}`} />
+                <div className="text-2xl font-black text-white tracking-tighter">{s.val}</div>
+                <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{s.label}</div>
               </div>
             ))}
           </div>
 
-          <div className="glass-panel p-6 rounded-2xl border border-slate-700/50">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <AlertTriangle className="text-red-500" /> Active Emergency Feed
+          <div className="glass-panel p-8 rounded-[2rem] border border-white/5 bg-slate-900/40">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
+                Active Rescue Missions
               </h3>
-              <Link href="/map" className="text-sm text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1">
-                <MapPin className="w-4 h-4" /> Live Map
+              <Link href="/map" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+                <MapPin className="w-3 h-3" /> View Realtime Map
               </Link>
             </div>
 
             {loadingMissions ? (
-              <div className="text-slate-500 text-center py-10">Searching for nearby signals...</div>
+              <div className="flex flex-col items-center justify-center py-20 text-slate-600">
+                <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-xs font-bold uppercase tracking-widest">Scanning disaster zones...</p>
+              </div>
             ) : missions.length === 0 ? (
-              <div className="text-slate-500 text-center py-10">No active incidents in your area.</div>
+              <div className="text-slate-500 text-center py-20 font-bold uppercase tracking-widest border-2 border-dashed border-white/5 rounded-3xl">
+                All zones cleared. Standby.
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid gap-6">
                 {missions.map((mission) => (
-                  <div key={mission.id} className="p-5 bg-slate-800/80 border border-slate-700 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:bg-slate-750">
+                  <div key={mission.id} className="p-6 bg-slate-800/40 border border-white/5 rounded-[1.5rem] flex flex-col lg:flex-row lg:items-center justify-between gap-6 transition-all hover:border-emerald-500/30 group relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 opacity-20"></div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter ${
-                          mission.status === 'accepted' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter ${
+                          mission.status === 'accepted' ? 'bg-blue-500 text-white' : 'bg-red-600 text-white'
                         }`}>
-                          {mission.status || 'Critical'}
+                          {mission.status === 'accepted' ? 'Rescuers Onsite' : 'Immediate Help Needed'}
                         </span>
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                           <Clock className="w-3 h-3"/> {new Date(mission.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </span>
                       </div>
-                      <h4 className="text-lg font-bold text-white leading-tight">{mission.category}</h4>
-                      <p className="text-slate-400 text-sm mt-1 line-clamp-2">{mission.description}</p>
+                      <h4 className="text-xl font-black text-white leading-none mb-2">{mission.category}</h4>
+                      <p className="text-slate-400 text-sm mb-4 line-clamp-2 max-w-2xl leading-relaxed">{mission.description}</p>
+                      
+                      {/* AI RESCUE REQUIREMENTS */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5 mt-4">
+                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest w-full mb-1 flex items-center gap-1">
+                          <Activity className="w-3 h-3" /> AI Analysis: Gear & Skills Required
+                        </span>
+                        {(mission.rescue_requirements || 'First Aid Kit, Basic Rescue Gear').split(',').map((item: string, idx: number) => (
+                          <span key={idx} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-lg text-[10px] font-bold">
+                            {item.trim()}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       {mission.status === 'accepted' ? (
                         <button 
                           onClick={() => updateStatus(mission.id, 'solved')}
-                          className="flex-1 md:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-900/20"
+                          className="w-full lg:w-40 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                         >
-                          Mark Solved
+                          Finish Rescue
                         </button>
                       ) : (
                         <button 
                           onClick={() => updateStatus(mission.id, 'accepted')}
-                          className="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-900/20"
+                          className="w-full lg:w-40 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                         >
-                          Accept Help
+                          Join Mission
                         </button>
                       )}
                     </div>
@@ -361,7 +408,7 @@ function VolunteerDashboard() {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

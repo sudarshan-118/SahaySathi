@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
-import { LayoutDashboard, Map, UserCircle, LogOut, ShieldAlert, Activity, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Map, UserCircle, LogOut, ShieldAlert, Activity, Menu, X, Building } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -76,7 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ) : (
               <>
                 <ShieldAlert className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-medium text-slate-300 capitalize">{role} Account</span>
+                <span className="text-xs font-medium text-slate-300 capitalize">Responder Account</span>
               </>
             )}
           </div>
