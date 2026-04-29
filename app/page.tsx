@@ -7,14 +7,22 @@ import { supabase } from '../lib/supabase';
 
 export default function LandingPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setIsLoggedIn(true);
     });
   }, []);
 
   const primaryLink = isLoggedIn ? "/dashboard" : "/login";
+
+  if (!mounted) return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <Activity className="w-12 h-12 text-blue-500 animate-pulse" />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-50 flex flex-col font-sans">
