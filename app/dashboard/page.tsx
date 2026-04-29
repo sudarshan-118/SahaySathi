@@ -280,34 +280,34 @@ function UnifiedUserDashboard({ user }: { user: any }) {
     setLoadingMissions(false);
   };
 
-  const updateStatus = async (id: number, newStatus: string) => {
+  const updateStatus = async (id: number, newStatus: string, progress?: number) => {
     if (!user) return;
     try {
-      // DUPLICATE PREVENTION: Check if mission is already taken
       if (newStatus === 'accepted') {
         const { data: currentMission } = await supabase
           .from('requests')
-          .select('status, volunteer_id')
+          .select('status')
           .eq('id', id)
           .single();
 
-        if (currentMission?.status === 'accepted') {
-          toast.warning('Mission claimed! Another responder is already on the way.');
-          fetchNearbyRequests(); // Refresh the list
+        if (currentMission?.status === 'accepted' && !progress) {
+          toast.warning('Mission already claimed.');
+          fetchNearbyRequests();
           return;
         }
       }
 
+      const updateData: any = { status: newStatus };
+      if (newStatus === 'accepted') updateData.volunteer_id = user.id;
+      if (progress !== undefined) updateData.progress = progress;
+
       const { error } = await supabase
         .from('requests')
-        .update({ 
-          status: newStatus,
-          volunteer_id: newStatus === 'accepted' ? user.id : null
-        })
+        .update(updateData)
         .eq('id', id);
 
       if (error) throw error;
-      toast.success(newStatus === 'solved' ? 'Incident marked as Solved' : 'Mission Accepted! Deploying...');
+      if (!progress) toast.success(newStatus === 'solved' ? 'Mission Cleared!' : 'Mission Joined!');
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -337,7 +337,12 @@ function UnifiedUserDashboard({ user }: { user: any }) {
       ) : (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           {activeMission && (
-            <MissionChat mission={activeMission} user={user} onClose={() => setActiveMission(null)} />
+            <MissionChat 
+              mission={activeMission} 
+              user={user} 
+              onClose={() => setActiveMission(null)} 
+              onProgressUpdate={(p) => updateStatus(activeMission.id, 'accepted', p)}
+            />
           )}
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -394,6 +399,19 @@ function UnifiedUserDashboard({ user }: { user: any }) {
                       <h4 className="text-xl font-black text-white leading-none mb-2">{mission.category}</h4>
                       <p className="text-slate-400 text-sm mb-4 line-clamp-2 max-w-2xl leading-relaxed">{mission.description}</p>
                       
+                      {/* PROGRESS BAR */}
+                      {mission.status === 'accepted' && (
+                        <div className="mb-4 max-w-xs">
+                          <div className="flex justify-between text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                            <span>Mission Progress</span>
+                            <span className="text-emerald-400">{mission.progress || 0}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${mission.progress || 0}%` }}></div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* AI RESCUE REQUIREMENTS */}
                       <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5 mt-4">
                         <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest w-full mb-1 flex items-center gap-1">
@@ -445,11 +463,12 @@ function UnifiedUserDashboard({ user }: { user: any }) {
 // -------------------------------------------------------------
 // MISSION CHAT & AI SITUATION ANALYST
 // -------------------------------------------------------------
-function MissionChat({ mission, user, onClose }: { mission: any, user: any, onClose: () => void }) {
+function MissionChat({ mission, user, onClose, onProgressUpdate }: { mission: any, user: any, onClose: () => void, onProgressUpdate: (p: number) => void }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [aiSummary, setAiSummary] = useState('Analysing live intel...');
   const [loadingAi, setLoadingAi] = useState(false);
+  const [localProgress, setLocalProgress] = useState(mission.progress || 0);
 
   useEffect(() => {
     fetchMessages();
@@ -501,6 +520,16 @@ function MissionChat({ mission, user, onClose }: { mission: any, user: any, onCl
     }
   };
 
+  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const p = parseInt(e.target.value);
+    setLocalProgress(p);
+  };
+
+  const submitProgress = () => {
+    onProgressUpdate(localProgress);
+    toast.success(`Progress updated to ${localProgress}%`);
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -517,7 +546,7 @@ function MissionChat({ mission, user, onClose }: { mission: any, user: any, onCl
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-full max-w-2xl h-[80vh] bg-slate-900 border border-white/10 rounded-[2rem] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+      <div className="w-full max-w-2xl h-[85vh] bg-slate-900 border border-white/10 rounded-[2rem] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         {/* Header */}
         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-800/50">
           <div className="flex items-center gap-3">
@@ -531,6 +560,30 @@ function MissionChat({ mission, user, onClose }: { mission: any, user: any, onCl
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-400 transition-all">
             <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* PROGRESS TRACKER IN CHAT */}
+        <div className="px-6 py-4 bg-slate-800/30 border-b border-white/5 flex items-center gap-6">
+          <div className="flex-1">
+            <div className="flex justify-between text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">
+              <span>Live Mission Progress</span>
+              <span className="text-emerald-400">{localProgress}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={localProgress}
+              onChange={handleProgressChange}
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            />
+          </div>
+          <button 
+            onClick={submitProgress}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+          >
+            Update
           </button>
         </div>
 
