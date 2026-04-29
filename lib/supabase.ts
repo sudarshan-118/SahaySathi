@@ -5,9 +5,10 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholde
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // Force fresh login every time browser/tab is closed
+    persistSession: true, // Keep it true for internal navigation
+    storageKey: 'sahaysathi-auth-token',
+    storage: typeof window !== 'undefined' ? window.sessionStorage : undefined, // USE SESSION STORAGE (Clears on tab close)
     autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: 'sahaysathi-auth-token'
+    detectSessionInUrl: true
   }
 });
