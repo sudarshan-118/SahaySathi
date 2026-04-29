@@ -10,10 +10,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // CORRECT FIX: Provide a dummy lock function that executes immediately
-    // This stops the 'Lock not released' error in Next.js Dev Mode
+    // Safely bypass the navigator lock to prevent 'Lock not released' crashes
+    // @ts-ignore
     lock: async (name: string, acquire: () => Promise<any>) => {
       return await acquire();
     }
-  }
+  } as any
 });
