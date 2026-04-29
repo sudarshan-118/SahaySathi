@@ -5,10 +5,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholde
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
+    persistSession: false, // Force fresh login every time browser/tab is closed
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // This helps prevent the 'Lock was not released' error in dev environments
     storageKey: 'sahaysathi-auth-token'
   }
 });
