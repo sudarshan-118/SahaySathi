@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
-import { ShieldAlert, Navigation, Search, MapPin, CheckCircle2, Clock, AlertTriangle, Package, Activity, BellRing, UserCircle, Users } from 'lucide-react';
+import { ShieldAlert, Navigation, Search, MapPin, CheckCircle2, Clock, AlertTriangle, Package, Activity, BellRing, UserCircle, Users, MessageSquare, Send, Sparkles, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 export default function DashboardPage() {
@@ -254,6 +254,7 @@ function UnifiedUserDashboard({ user }: { user: any }) {
   const [missions, setMissions] = useState<any[]>([]);
   const [loadingMissions, setLoadingMissions] = useState(true);
   const [view, setView] = useState<'missions' | 'report'>('missions');
+  const [activeMission, setActiveMission] = useState<any>(null);
 
   useEffect(() => {
     fetchNearbyRequests();
@@ -335,6 +336,10 @@ function UnifiedUserDashboard({ user }: { user: any }) {
         <VictimDashboard user={user} />
       ) : (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {activeMission && (
+            <MissionChat mission={activeMission} user={user} onClose={() => setActiveMission(null)} />
+          )}
+          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
               { label: 'Rank Points', val: '450', icon: Activity, color: 'text-emerald-400' },
@@ -401,18 +406,26 @@ function UnifiedUserDashboard({ user }: { user: any }) {
                         ))}
                       </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row lg:flex-col gap-3 min-w-[160px]">
                       {mission.status === 'accepted' ? (
-                        <button 
-                          onClick={() => updateStatus(mission.id, 'solved')}
-                          className="w-full lg:w-40 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
-                        >
-                          Finish Rescue
-                        </button>
+                        <>
+                          <button 
+                            onClick={() => setActiveMission(mission)}
+                            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                          >
+                            <MessageSquare className="w-3 h-3" /> Situation Room
+                          </button>
+                          <button 
+                            onClick={() => updateStatus(mission.id, 'solved')}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                          >
+                            Finish Rescue
+                          </button>
+                        </>
                       ) : (
                         <button 
                           onClick={() => updateStatus(mission.id, 'accepted')}
-                          className="w-full lg:w-40 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
+                          className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-[0.98]"
                         >
                           Join Mission
                         </button>
@@ -425,6 +438,148 @@ function UnifiedUserDashboard({ user }: { user: any }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// MISSION CHAT & AI SITUATION ANALYST
+// -------------------------------------------------------------
+function MissionChat({ mission, user, onClose }: { mission: any, user: any, onClose: () => void }) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [aiSummary, setAiSummary] = useState('Analysing live intel...');
+  const [loadingAi, setLoadingAi] = useState(false);
+
+  useEffect(() => {
+    fetchMessages();
+    const channel = supabase
+      .channel(`mission-chat-${mission.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: `request_id=eq.${mission.id}` }, () => {
+        fetchMessages();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [mission.id]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      generateAiBriefing();
+    }
+  }, [messages.length]);
+
+  const fetchMessages = async () => {
+    const { data } = await supabase
+      .from('mission_messages')
+      .select('*')
+      .eq('request_id', mission.id)
+      .order('created_at', { ascending: true });
+    if (data) setMessages(data);
+  };
+
+  const generateAiBriefing = async () => {
+    if (messages.length < 2) return;
+    setLoadingAi(true);
+    try {
+      const chatContent = messages.map(m => `${m.user_name}: ${m.message}`).join('\n');
+      const response = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          description: `ACT AS TACTICAL COORDINATOR. ANALYZE THIS RESCUE CHAT AND PROVIDE A 2-SENTENCE LIVE BRIEFING FOR NEW ARRIVALS. FOCUS ON PROGRESS AND REMAINING DANGER.
+          CHAT HISTORY:
+          ${chatContent}` 
+        })
+      });
+      const data = await response.json();
+      setAiSummary(data.summary || 'Scene coordination in progress.');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingAi(false);
+    }
+  };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const { error } = await supabase.from('mission_messages').insert({
+      request_id: mission.id,
+      user_id: user.id,
+      user_name: user.email?.split('@')[0] || 'Responder',
+      message: newMessage
+    });
+
+    if (!error) setNewMessage('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="w-full max-w-2xl h-[80vh] bg-slate-900 border border-white/10 rounded-[2rem] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        {/* Header */}
+        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-slate-800/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500 rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+              <MessageSquare className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-white font-black uppercase tracking-tighter">Mission Situation Room</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{mission.category} | Zone ID: {mission.id.slice(0,8)}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-slate-400 transition-all">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* AI TACTICAL BRIEFING */}
+        <div className="p-4 bg-emerald-500/5 border-b border-emerald-500/10 flex gap-4 items-start">
+          <div className="p-2 bg-emerald-500/20 rounded-lg">
+            <Sparkles className={`w-4 h-4 text-emerald-400 ${loadingAi ? 'animate-pulse' : ''}`} />
+          </div>
+          <div>
+            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-1">AI Tactical Briefing (Live)</span>
+            <p className="text-xs text-emerald-100/80 italic">"{aiSummary}"</p>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full opacity-20">
+              <MessageSquare className="w-12 h-12 mb-2 text-white" />
+              <p className="text-xs font-bold uppercase tracking-widest text-white">No comms yet. Start briefing.</p>
+            </div>
+          ) : (
+            messages.map((m, i) => (
+              <div key={i} className={`flex flex-col ${m.user_id === user.id ? 'items-end' : 'items-start'}`}>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 px-1">{m.user_name}</span>
+                <div className={`px-4 py-2 rounded-2xl text-sm max-w-[80%] ${
+                  m.user_id === user.id ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 rounded-tl-none'
+                }`}>
+                  {m.message}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Input */}
+        <form onSubmit={sendMessage} className="p-4 bg-slate-800/30 border-t border-white/5 flex gap-2">
+          <input 
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Type status update..."
+            className="flex-1 bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+          />
+          <button type="submit" className="p-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg active:scale-95">
+            <Send className="w-5 h-5" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
