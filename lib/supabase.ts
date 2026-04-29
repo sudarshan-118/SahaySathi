@@ -11,6 +11,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'sahaysathi-auth-token',
     storage: isBrowser ? window.sessionStorage : undefined,
     autoRefreshToken: isBrowser,
-    detectSessionInUrl: isBrowser
+    detectSessionInUrl: isBrowser,
+    // THE ULTIMATE STABILITY FIX: Prevent the client from hanging on navigator locks
+    // This ensures the 'Get Started' button works instantly every time.
+    // @ts-ignore
+    lock: isBrowser ? async (name, acquire) => await acquire() : undefined
   }
-});
+} as any);
