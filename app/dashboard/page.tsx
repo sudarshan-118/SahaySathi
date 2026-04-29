@@ -12,30 +12,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkUser();
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        setUser(authUser);
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
-          .eq('id', authUser.id)
+          .eq('id', session.user.id)
           .single();
-          
-        if (profile?.role) {
-          setRole(profile.role);
-        }
+        if (profile?.role) setRole(profile.role);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
       setLoading(false);
-    }
-  };
+    };
+    init();
+  }, []);
 
   if (loading) return (
     <div className="min-h-[60vh] flex items-center justify-center">

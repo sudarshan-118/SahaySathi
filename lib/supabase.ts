@@ -9,11 +9,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'sahaysathi-auth-token',
     storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
-    // Safely bypass the navigator lock to prevent 'Lock not released' crashes
-    // @ts-ignore
-    lock: async (name: string, acquire: () => Promise<any>) => {
-      return await acquire();
-    }
-  } as any
+    detectSessionInUrl: true
+  }
 });
