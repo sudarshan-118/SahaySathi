@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #3b82f6; /* blue-500 */
+  --color-primary-dark: #2563eb; /* blue-600 */
+  --color-danger: #ef4444; /* red-500 */
+  --color-danger-dark: #dc2626; /* red-600 */
+  --color-success: #10b981; /* emerald-500 */
+  --color-warning: #f59e0b; /* amber-500 */
+  
+  --color-background: #0f172a; /* slate-900 */
+  --color-surface: #1e293b; /* slate-800 */
+  --color-surface-hover: #334155; /* slate-700 */
+  
+  --color-text: #f8fafc; /* slate-50 */
+  --color-text-muted: #94a3b8; /* slate-400 */
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: "Inter", "Roboto", "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom utilities */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(71, 85, 105, 0.8);
+  border-radius: 20px;
+}
+
+/* Leaflet dark mode overrides */
+.leaflet-layer,
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out,
+.leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
