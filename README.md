@@ -1,5 +1,3 @@
-﻿# SahaySathi
-# SahaySathi
 # 🌿 SahaySathi
 
 > Empowering communities through technology-driven sustainable solutions.
@@ -94,16 +92,6 @@ http://localhost:3000
 ```
 
 ---
-
-## 📸 Screenshots
-
-Add your project screenshots here.
-
-Example:
-
-```md
-![Home Page](./public/home.png)
-```
 
 ---
 
